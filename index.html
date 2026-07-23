@@ -7,7 +7,7 @@
 <meta name="description" content="A speech-to-text dictation unit that runs entirely in your browser." />
 <link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <link rel="icon" href="apple-touch-icon.png" />
-<meta name="theme-color" content="#2e302c" />
+<meta name="theme-color" content="#0a0d18" />
 <!--
   Deliberately NOT setting apple-mobile-web-app-capable.
   iOS disables microphone / speech recognition for pages launched in
@@ -17,131 +17,137 @@
   the mic working. See README.md for details.
 -->
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 * , *::before, *::after { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+html, body { margin: 0; padding: 0; width: 100%; overflow-x: hidden; }
 
 body {
-  --shell: #a9aaa3;
-  --shell-hi: #c3c4bd;
-  --ink: #2c2e29;
-  --lcd: #b6c29e;
-  --lcd-lo: #a3b08b;
-  --lcd-ink: #1f2618;
-  --rec: #c1301f;
-  --rec-hi: #e5533c;
+  --bg-1: #0a0d18;
+  --bg-2: #141a2e;
+  --card-bg: rgba(255,255,255,.055);
+  --card-border: rgba(255,255,255,.11);
+  --panel-bg: rgba(255,255,255,.035);
+  --panel-border: rgba(255,255,255,.08);
+  --text-hi: #f2f4fa;
+  --text-lo: #8b93ab;
+  --text-ghost: #5c6480;
+  --accent-1: #ff5f7e;
+  --accent-2: #ff2f8e;
+  --idle-bar: #333c58;
+
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 28px 16px 48px;
-  background: radial-gradient(120% 90% at 50% 0%, #4a4c47 0%, #2e302c 55%, #232420 100%);
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  padding: 32px 18px 48px;
+  background:
+    radial-gradient(90% 60% at 15% -10%, rgba(255,60,110,.14) 0%, rgba(255,60,110,0) 55%),
+    radial-gradient(80% 55% at 105% 0%, rgba(90,110,255,.14) 0%, rgba(90,110,255,0) 55%),
+    linear-gradient(180deg, var(--bg-2) 0%, var(--bg-1) 100%);
+  font-family: 'Inter', ui-sans-serif, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 .du-device {
   width: 100%;
-  max-width: 580px;
-  border-radius: 20px;
-  padding: 16px;
-  background:
-    repeating-linear-gradient(90deg, rgba(255,255,255,.045) 0 1px, rgba(0,0,0,.035) 1px 3px),
-    linear-gradient(176deg, var(--shell-hi) 0%, var(--shell) 34%, #9b9c95 78%, #8b8c85 100%);
-  border: 1px solid #7c7d77;
+  max-width: 460px;
+  min-width: 0;
+  border-radius: 28px;
+  padding: 22px;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.55),
-    inset 0 -2px 5px rgba(0,0,0,.28),
-    0 22px 48px -14px rgba(0,0,0,.7),
-    0 2px 0 rgba(0,0,0,.35);
+    0 1px 0 rgba(255,255,255,.06) inset,
+    0 30px 60px -20px rgba(0,0,0,.65);
 }
 
 .du-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 2px 4px 12px;
-  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  gap: 10px;
+  padding: 2px 2px 20px;
+  min-width: 0;
 }
 .du-brand {
-  font-size: 19px;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 20px;
   font-weight: 700;
-  letter-spacing: .22em;
-  text-transform: uppercase;
-  color: var(--ink);
-  text-shadow: 0 1px 0 rgba(255,255,255,.4);
+  letter-spacing: -.01em;
+  color: var(--text-hi);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.du-brand span { font-weight: 500; opacity: .55; letter-spacing: .16em; }
+.du-brand span { font-weight: 500; color: var(--text-lo); }
 .du-lamp {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 13px;
+  gap: 6px;
+  flex: none;
+  padding: 6px 12px 6px 9px;
+  border-radius: 100px;
+  font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: .18em;
+  letter-spacing: .06em;
   text-transform: uppercase;
-  color: var(--ink);
-  opacity: .8;
+  color: var(--text-lo);
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.08);
 }
 .du-dot {
-  width: 9px; height: 9px; border-radius: 50%;
-  background: #6f7169;
-  box-shadow: inset 0 1px 1px rgba(0,0,0,.5);
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--text-lo);
+  flex: none;
 }
 .du-dot.on {
-  background: var(--rec-hi);
-  box-shadow: inset 0 1px 1px rgba(255,255,255,.4), 0 0 9px 1px rgba(220,70,45,.85);
+  background: var(--accent-1);
+  box-shadow: 0 0 0 3px rgba(255,60,110,.22);
   animation: du-pulse 1.4s ease-in-out infinite;
 }
-@keyframes du-pulse { 50% { opacity: .35; box-shadow: none; } }
+@keyframes du-pulse { 50% { opacity: .4; box-shadow: 0 0 0 3px rgba(255,60,110,.06); } }
 
 .du-lcd {
-  border-radius: 5px;
-  background: linear-gradient(180deg, var(--lcd) 0%, var(--lcd-lo) 100%);
-  border: 1px solid #5f6355;
-  box-shadow:
-    inset 0 3px 9px rgba(31,38,24,.42),
-    inset 0 -1px 0 rgba(255,255,255,.25),
-    0 1px 0 rgba(255,255,255,.45);
+  border-radius: 18px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
   overflow: hidden;
   position: relative;
 }
-.du-lcd::after {
-  content: '';
-  position: absolute; inset: 0;
-  background: repeating-linear-gradient(180deg, rgba(31,38,24,.05) 0 1px, transparent 1px 3px);
-  pointer-events: none;
-}
 .du-strip {
   display: flex;
-  gap: 18px;
+  gap: 16px;
   align-items: center;
-  padding: 8px 12px;
-  border-bottom: 1px dashed rgba(31,38,24,.3);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--panel-border);
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .1em;
-  color: var(--lcd-ink);
-  position: relative;
+  font-weight: 500;
+  letter-spacing: .02em;
+  color: var(--text-lo);
+  min-width: 0;
 }
-.du-strip b { font-variant-numeric: tabular-nums; font-weight: 600; }
-.du-strip i { font-style: normal; opacity: .5; margin-right: 5px; }
-.du-strip .du-spacer { margin-left: auto; }
+.du-strip b { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-hi); margin-left: 5px; }
+.du-strip i { font-style: normal; opacity: .7; }
+.du-strip .du-spacer { margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .du-screen {
-  height: 264px;
+  height: 230px;
   overflow-y: auto;
-  padding: 14px 14px 18px;
-  font-size: 14.5px;
-  line-height: 1.75;
-  color: var(--lcd-ink);
+  padding: 16px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--text-hi);
   white-space: pre-wrap;
   word-break: break-word;
   position: relative;
 }
-.du-screen:focus-visible { outline: 2px solid #3c4a2c; outline-offset: -2px; }
+.du-screen:focus-visible { outline: none; }
 textarea.du-screen {
   width: 100%;
   display: block;
@@ -151,25 +157,16 @@ textarea.du-screen {
   font-family: inherit;
   -webkit-appearance: none;
 }
-.du-ghost { opacity: .48; font-style: italic; }
-.du-caret {
-  display: inline-block;
-  width: 7px; height: 15px;
-  vertical-align: -2px;
-  margin-left: 3px;
-  background: var(--lcd-ink);
-  animation: du-blink 1.05s steps(1) infinite;
-}
-@keyframes du-blink { 50% { opacity: 0; } }
+textarea.du-screen::placeholder { color: var(--text-ghost); }
 .du-alert {
-  margin: 0 12px 12px;
-  padding: 8px 10px;
-  border: 1px solid rgba(150,40,25,.55);
-  background: rgba(180,55,35,.14);
-  color: #5c1a10;
+  margin: 0 14px 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,90,90,.28);
+  background: rgba(255,70,70,.1);
+  color: #ffb4b0;
   font-size: 12.5px;
   line-height: 1.5;
-  border-radius: 3px;
+  border-radius: 10px;
   display: none;
 }
 .du-alert.show { display: block; }
@@ -178,113 +175,100 @@ textarea.du-screen {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 16px 4px 4px;
+  padding: 22px 4px 6px;
 }
-.du-meter { display: flex; flex-direction: column; gap: 7px; }
-.du-bars { display: flex; align-items: flex-end; gap: 3px; height: 30px; }
+.du-meter { display: flex; flex-direction: column; gap: 9px; min-width: 0; flex: 1; }
+.du-bars { display: flex; align-items: flex-end; gap: 3px; height: 28px; }
 .du-bar {
-  width: 5px;
-  border-radius: 1px;
-  background: #2a3320;
-  opacity: .12;
-  transition: opacity .05s linear;
+  width: 100%;
+  border-radius: 2px;
+  background: var(--idle-bar);
+  opacity: .55;
+  transition: opacity .05s linear, background .05s linear;
 }
-.du-bar.pk { background: #a82c1a; }
+.du-bar.pk { background: linear-gradient(180deg, var(--accent-1), var(--accent-2)); }
 .du-cap {
-  font-family: 'Barlow Condensed', sans-serif;
-  font-size: 11px; font-weight: 600;
-  letter-spacing: .2em; text-transform: uppercase;
-  color: var(--ink); opacity: .62;
+  font-size: 10.5px; font-weight: 600;
+  letter-spacing: .12em; text-transform: uppercase;
+  color: var(--text-lo);
 }
 
 .du-rec {
-  margin-left: auto;
-  width: 92px; height: 92px;
   flex: none;
+  width: 84px; height: 84px;
   border-radius: 50%;
-  border: 1px solid #5e2216;
+  border: none;
   cursor: pointer;
-  font-family: 'Barlow Condensed', sans-serif;
-  font-size: 15px; font-weight: 700;
-  letter-spacing: .2em; text-transform: uppercase;
-  color: #fbe9e5;
-  background: radial-gradient(70% 70% at 50% 26%, var(--rec-hi) 0%, var(--rec) 52%, #8e2115 100%);
-  box-shadow:
-    inset 0 2px 0 rgba(255,255,255,.4),
-    inset 0 -4px 8px rgba(0,0,0,.4),
-    0 5px 0 #6b1a10,
-    0 12px 20px -6px rgba(0,0,0,.6);
-  transition: transform .06s ease, box-shadow .06s ease;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13.5px; font-weight: 600;
+  letter-spacing: .04em;
+  color: #fff;
+  background: linear-gradient(150deg, var(--accent-1) 0%, var(--accent-2) 100%);
+  box-shadow: 0 10px 24px -8px rgba(255,45,120,.55);
+  transition: transform .08s ease, box-shadow .15s ease;
+  position: relative;
 }
-.du-rec:active:not(:disabled), .du-rec.live {
-  transform: translateY(4px);
-  box-shadow:
-    inset 0 3px 10px rgba(0,0,0,.5),
-    0 1px 0 #6b1a10,
-    0 4px 10px -4px rgba(0,0,0,.6);
+.du-rec::before {
+  content: '';
+  position: absolute; inset: -8px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,80,130,.4);
+  opacity: 0;
+  transform: scale(.85);
 }
-.du-rec.live { animation: du-glow 1.4s ease-in-out infinite; }
-@keyframes du-glow { 50% { filter: brightness(1.18); } }
-.du-rec:disabled { opacity: .4; cursor: not-allowed; }
+.du-rec:active:not(:disabled) { transform: scale(.96); }
+.du-rec.live {
+  box-shadow: 0 10px 30px -6px rgba(255,45,120,.7);
+}
+.du-rec.live::before { animation: du-ring 1.6s ease-out infinite; }
+@keyframes du-ring {
+  0% { opacity: .55; transform: scale(.85); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+.du-rec:disabled { opacity: .35; cursor: not-allowed; }
 
 .du-keys {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(0,0,0,.16);
-  box-shadow: 0 -1px 0 rgba(255,255,255,.35);
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--panel-border);
 }
 .du-key {
-  padding: 9px 15px;
-  border-radius: 4px;
-  border: 1px solid #7b7c75;
+  padding: 10px 16px;
+  border-radius: 100px;
+  border: 1px solid rgba(255,255,255,.1);
   cursor: pointer;
-  font-family: 'Barlow Condensed', sans-serif;
-  font-size: 14px; font-weight: 600;
-  letter-spacing: .16em; text-transform: uppercase;
-  color: var(--ink);
-  background: linear-gradient(180deg, #cfd0c9 0%, #b0b1aa 100%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 2px 0 #83847d, 0 3px 5px rgba(0,0,0,.25);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; font-weight: 600;
+  color: var(--text-hi);
+  background: rgba(255,255,255,.055);
+  transition: background .12s ease, transform .06s ease;
 }
-.du-key:active:not(:disabled) {
-  transform: translateY(2px);
-  box-shadow: inset 0 1px 3px rgba(0,0,0,.3);
-}
-.du-key:disabled { opacity: .42; cursor: not-allowed; }
-.du-key.armed { color: #6e1d12; border-color: #8d5348; }
-.du-sel { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.du-key:hover:not(:disabled) { background: rgba(255,255,255,.09); }
+.du-key:active:not(:disabled) { transform: scale(.97); }
+.du-key:disabled { opacity: .35; cursor: not-allowed; }
+.du-key.armed { color: #ff8d8d; border-color: rgba(255,90,90,.35); background: rgba(255,70,70,.1); }
+.du-sel { margin-left: auto; display: flex; align-items: center; }
 .du-key select {
-  font-family: 'Barlow Condensed', sans-serif;
-  font-size: 14px; font-weight: 600; letter-spacing: .14em;
-  color: var(--ink);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; font-weight: 600;
+  color: var(--text-hi);
   background: transparent;
   border: 0; cursor: pointer; outline: none;
 }
-:focus-visible { outline: 2px solid #40261f; outline-offset: 2px; }
-
-.du-note {
-  max-width: 580px;
-  width: 100%;
-  margin-top: 14px;
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 11.5px;
-  line-height: 1.6;
-  color: #9a9c94;
-  text-align: center;
-  padding: 0 8px;
-}
-.du-note a { color: #c3a89c; }
+.du-key select option { background: #1a2038; color: var(--text-hi); }
+:focus-visible { outline: 2px solid var(--accent-1); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
-@media (max-width: 460px) {
-  .du-rec { width: 76px; height: 76px; font-size: 13px; }
-  .du-screen { height: 220px; }
-  .du-strip { gap: 12px; font-size: 10px; }
+@media (max-width: 380px) {
+  .du-rec { width: 72px; height: 72px; font-size: 12px; }
+  .du-screen { height: 200px; }
+  .du-device { padding: 18px; border-radius: 24px; }
 }
 </style>
 </head>
@@ -328,8 +312,6 @@ textarea.du-screen {
     </div>
   </div>
 </div>
-
-<div class="du-note">Runs entirely in this browser — nothing you say is stored or sent anywhere except to your device's own speech engine.</div>
 
 <script>
 (function () {
