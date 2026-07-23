@@ -367,6 +367,9 @@ textarea.du-screen::placeholder { color: var(--text-ghost); }
   var rec = null;
   var wantListening = false;
   var timerId = null;
+  var pendingRestart = false;
+  var reArmTimer = null;
+  var startStallTimer = null;
   var audioCtx = null, audioStream = null, raf = null;
 
   function pad(n) { return String(n).padStart(2, '0'); }
@@ -487,7 +490,13 @@ textarea.du-screen::placeholder { color: var(--text-ghost); }
       } else {
         state.interim = '';
         renderScreen();
+        if (pendingRestart) unlockRecord(); // confirmed closed — no need to wait out the fallback timer
       }
+    };
+
+    r.onstart = function () {
+      if (r !== rec) return;
+      clearTimeout(startStallTimer);
     };
 
     return r;
@@ -517,8 +526,7 @@ textarea.du-screen::placeholder { color: var(--text-ghost); }
     }, 1000);
   }
 
-  function start() {
-    if (!supported) return;
+  function reallyStart() {
     hideAlert();
     state.armed = false;
     clearBtn.classList.remove('armed');
@@ -531,17 +539,50 @@ textarea.du-screen::placeholder { color: var(--text-ghost); }
       rec.start();
       startListeningUI();
       startMeter();
+      // Safety net: on some browsers `start()` can return without ever
+      // actually attaching to the microphone (most often right after a
+      // previous session, if its device handle hasn't been released yet).
+      // If we don't hear back within a few seconds, don't leave the UI
+      // stuck showing "recording" with nothing happening.
+      clearTimeout(startStallTimer);
+      startStallTimer = setTimeout(function () {
+        if (state.listening && wantListening) {
+          stop();
+          showAlert('The microphone did not respond. Press Record to try again.');
+        }
+      }, 4000);
     } catch (err) {
       showAlert('Could not start the microphone. Close other tabs using it and try again.');
       wantListening = false;
     }
   }
 
+  function start() {
+    if (!supported || recBtn.disabled) return;
+    reallyStart();
+  }
+
   function stop() {
     wantListening = false;
-    if (rec) rec.stop();
+    clearTimeout(startStallTimer);
+    if (rec) { try { rec.abort(); } catch (e) {} }
     stopListeningUI();
     renderScreen();
+
+    // Lock the button until the old mic session is confirmed released
+    // (via onend below) or a short timeout passes, whichever is first —
+    // this is what stopped a fresh Record press from colliding with a
+    // not-yet-closed previous one.
+    pendingRestart = true;
+    recBtn.disabled = true;
+    clearTimeout(reArmTimer);
+    reArmTimer = setTimeout(unlockRecord, 350);
+  }
+
+  function unlockRecord() {
+    clearTimeout(reArmTimer);
+    pendingRestart = false;
+    if (supported) recBtn.disabled = false;
   }
 
   recBtn.addEventListener('click', function () {
