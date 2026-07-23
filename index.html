@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Talkback S-1 — Dictation Unit</title>
+<meta name="description" content="A speech-to-text dictation unit that runs entirely in your browser." />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="icon" href="apple-touch-icon.png" />
+<meta name="theme-color" content="#2e302c" />
+<!--
+  Deliberately NOT setting apple-mobile-web-app-capable.
+  iOS disables microphone / speech recognition for pages launched in
+  standalone (fullscreen, no-Safari-chrome) mode — it's an old, unfixed
+  WebKit limitation (see webkit.org/b/185448). Leaving this page as a
+  regular Safari tab (even when launched from a home screen icon) keeps
+  the mic working. See README.md for details.
+-->
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+
+* , *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body {
+  --shell: #a9aaa3;
+  --shell-hi: #c3c4bd;
+  --ink: #2c2e29;
+  --lcd: #b6c29e;
+  --lcd-lo: #a3b08b;
+  --lcd-ink: #1f2618;
+  --rec: #c1301f;
+  --rec-hi: #e5533c;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 16px 48px;
+  background: radial-gradient(120% 90% at 50% 0%, #4a4c47 0%, #2e302c 55%, #232420 100%);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+.du-device {
+  width: 100%;
+  max-width: 580px;
+  border-radius: 20px;
+  padding: 16px;
+  background:
+    repeating-linear-gradient(90deg, rgba(255,255,255,.045) 0 1px, rgba(0,0,0,.035) 1px 3px),
+    linear-gradient(176deg, var(--shell-hi) 0%, var(--shell) 34%, #9b9c95 78%, #8b8c85 100%);
+  border: 1px solid #7c7d77;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.55),
+    inset 0 -2px 5px rgba(0,0,0,.28),
+    0 22px 48px -14px rgba(0,0,0,.7),
+    0 2px 0 rgba(0,0,0,.35);
+}
+
+.du-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 4px 12px;
+  font-family: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+}
+.du-brand {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: var(--ink);
+  text-shadow: 0 1px 0 rgba(255,255,255,.4);
+}
+.du-brand span { font-weight: 500; opacity: .55; letter-spacing: .16em; }
+.du-lamp {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--ink);
+  opacity: .8;
+}
+.du-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: #6f7169;
+  box-shadow: inset 0 1px 1px rgba(0,0,0,.5);
+}
+.du-dot.on {
+  background: var(--rec-hi);
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.4), 0 0 9px 1px rgba(220,70,45,.85);
+  animation: du-pulse 1.4s ease-in-out infinite;
+}
+@keyframes du-pulse { 50% { opacity: .35; box-shadow: none; } }
+
+.du-lcd {
+  border-radius: 5px;
+  background: linear-gradient(180deg, var(--lcd) 0%, var(--lcd-lo) 100%);
+  border: 1px solid #5f6355;
+  box-shadow:
+    inset 0 3px 9px rgba(31,38,24,.42),
+    inset 0 -1px 0 rgba(255,255,255,.25),
+    0 1px 0 rgba(255,255,255,.45);
+  overflow: hidden;
+  position: relative;
+}
+.du-lcd::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(180deg, rgba(31,38,24,.05) 0 1px, transparent 1px 3px);
+  pointer-events: none;
+}
+.du-strip {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px dashed rgba(31,38,24,.3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  color: var(--lcd-ink);
+  position: relative;
+}
+.du-strip b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.du-strip i { font-style: normal; opacity: .5; margin-right: 5px; }
+.du-strip .du-spacer { margin-left: auto; }
+
+.du-screen {
+  height: 264px;
+  overflow-y: auto;
+  padding: 14px 14px 18px;
+  font-size: 14.5px;
+  line-height: 1.75;
+  color: var(--lcd-ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  position: relative;
+}
+.du-screen:focus-visible { outline: 2px solid #3c4a2c; outline-offset: -2px; }
+textarea.du-screen {
+  width: 100%;
+  display: block;
+  background: transparent;
+  border: 0;
+  resize: none;
+  font-family: inherit;
+  -webkit-appearance: none;
+}
+.du-ghost { opacity: .48; font-style: italic; }
+.du-caret {
+  display: inline-block;
+  width: 7px; height: 15px;
+  vertical-align: -2px;
+  margin-left: 3px;
+  background: var(--lcd-ink);
+  animation: du-blink 1.05s steps(1) infinite;
+}
+@keyframes du-blink { 50% { opacity: 0; } }
+.du-alert {
+  margin: 0 12px 12px;
+  padding: 8px 10px;
+  border: 1px solid rgba(150,40,25,.55);
+  background: rgba(180,55,35,.14);
+  color: #5c1a10;
+  font-size: 12.5px;
+  line-height: 1.5;
+  border-radius: 3px;
+  display: none;
+}
+.du-alert.show { display: block; }
+
+.du-deck {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 4px 4px;
+}
+.du-meter { display: flex; flex-direction: column; gap: 7px; }
+.du-bars { display: flex; align-items: flex-end; gap: 3px; height: 30px; }
+.du-bar {
+  width: 5px;
+  border-radius: 1px;
+  background: #2a3320;
+  opacity: .12;
+  transition: opacity .05s linear;
+}
+.du-bar.pk { background: #a82c1a; }
+.du-cap {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px; font-weight: 600;
+  letter-spacing: .2em; text-transform: uppercase;
+  color: var(--ink); opacity: .62;
+}
+
+.du-rec {
+  margin-left: auto;
+  width: 92px; height: 92px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid #5e2216;
+  cursor: pointer;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 15px; font-weight: 700;
+  letter-spacing: .2em; text-transform: uppercase;
+  color: #fbe9e5;
+  background: radial-gradient(70% 70% at 50% 26%, var(--rec-hi) 0%, var(--rec) 52%, #8e2115 100%);
+  box-shadow:
+    inset 0 2px 0 rgba(255,255,255,.4),
+    inset 0 -4px 8px rgba(0,0,0,.4),
+    0 5px 0 #6b1a10,
+    0 12px 20px -6px rgba(0,0,0,.6);
+  transition: transform .06s ease, box-shadow .06s ease;
+}
+.du-rec:active:not(:disabled), .du-rec.live {
+  transform: translateY(4px);
+  box-shadow:
+    inset 0 3px 10px rgba(0,0,0,.5),
+    0 1px 0 #6b1a10,
+    0 4px 10px -4px rgba(0,0,0,.6);
+}
+.du-rec.live { animation: du-glow 1.4s ease-in-out infinite; }
+@keyframes du-glow { 50% { filter: brightness(1.18); } }
+.du-rec:disabled { opacity: .4; cursor: not-allowed; }
+
+.du-keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(0,0,0,.16);
+  box-shadow: 0 -1px 0 rgba(255,255,255,.35);
+}
+.du-key {
+  padding: 9px 15px;
+  border-radius: 4px;
+  border: 1px solid #7b7c75;
+  cursor: pointer;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px; font-weight: 600;
+  letter-spacing: .16em; text-transform: uppercase;
+  color: var(--ink);
+  background: linear-gradient(180deg, #cfd0c9 0%, #b0b1aa 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 2px 0 #83847d, 0 3px 5px rgba(0,0,0,.25);
+}
+.du-key:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.3);
+}
+.du-key:disabled { opacity: .42; cursor: not-allowed; }
+.du-key.armed { color: #6e1d12; border-color: #8d5348; }
+.du-sel { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.du-key select {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 14px; font-weight: 600; letter-spacing: .14em;
+  color: var(--ink);
+  background: transparent;
+  border: 0; cursor: pointer; outline: none;
+}
+:focus-visible { outline: 2px solid #40261f; outline-offset: 2px; }
+
+.du-note {
+  max-width: 580px;
+  width: 100%;
+  margin-top: 14px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: #9a9c94;
+  text-align: center;
+  padding: 0 8px;
+}
+.du-note a { color: #c3a89c; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+@media (max-width: 460px) {
+  .du-rec { width: 76px; height: 76px; font-size: 13px; }
+  .du-screen { height: 220px; }
+  .du-strip { gap: 12px; font-size: 10px; }
+}
+</style>
+</head>
+<body>
+
+<div class="du-device">
+  <div class="du-head">
+    <div class="du-brand">Talkback <span>S-1</span></div>
+    <div class="du-lamp"><span class="du-dot" id="lamp"></span><span id="lampText">Ready</span></div>
+  </div>
+
+  <div class="du-lcd">
+    <div class="du-strip">
+      <span><i>Time</i><b id="clock">00:00:00</b></span>
+      <span><i>Words</i><b id="wordCount">0</b></span>
+      <span class="du-spacer"><i>Lang</i><b id="langLabel">EN-US</b></span>
+    </div>
+
+    <textarea class="du-screen" id="screen" spellcheck="true"
+      placeholder="Press Record and start talking. Your words land here, and you can fix them by typing once you stop."></textarea>
+
+    <div class="du-alert" id="alert"></div>
+  </div>
+
+  <div class="du-deck">
+    <div class="du-meter">
+      <div class="du-bars" id="bars" aria-hidden="true"></div>
+      <div class="du-cap">Input level</div>
+    </div>
+    <button class="du-rec" id="recBtn">Record</button>
+  </div>
+
+  <div class="du-keys">
+    <button class="du-key" id="copyBtn" disabled>Copy</button>
+    <button class="du-key" id="saveBtn" disabled>Save .txt</button>
+    <button class="du-key" id="clearBtn" disabled>Clear</button>
+    <div class="du-sel">
+      <label class="du-key" style="cursor:default">
+        <select id="langSelect" aria-label="Recognition language"></select>
+      </label>
+    </div>
+  </div>
+</div>
+
+<div class="du-note">Runs entirely in this browser — nothing you say is stored or sent anywhere except to your device's own speech engine.</div>
+
+<script>
+(function () {
+  var LANGS = [
+    ["en-US","EN-US"], ["en-GB","EN-GB"], ["es-ES","ES-ES"], ["fr-FR","FR-FR"],
+    ["de-DE","DE-DE"], ["it-IT","IT-IT"], ["pt-BR","PT-BR"], ["nl-NL","NL-NL"],
+    ["ru-RU","RU-RU"], ["hi-IN","HI-IN"], ["ar-SA","AR-SA"], ["ja-JP","JA-JP"],
+    ["ko-KR","KO-KR"], ["zh-CN","ZH-CN"]
+  ];
+  var BAR_COUNT = 14, PEAK_FROM = 11;
+
+  var screenEl = document.getElementById('screen');
+  var alertEl = document.getElementById('alert');
+  var lamp = document.getElementById('lamp');
+  var lampText = document.getElementById('lampText');
+  var clockEl = document.getElementById('clock');
+  var wordEl = document.getElementById('wordCount');
+  var langLabelEl = document.getElementById('langLabel');
+  var recBtn = document.getElementById('recBtn');
+  var copyBtn = document.getElementById('copyBtn');
+  var saveBtn = document.getElementById('saveBtn');
+  var clearBtn = document.getElementById('clearBtn');
+  var langSelect = document.getElementById('langSelect');
+  var barsWrap = document.getElementById('bars');
+
+  var bars = [];
+  for (var i = 0; i < BAR_COUNT; i++) {
+    var b = document.createElement('div');
+    b.className = 'du-bar' + (i >= PEAK_FROM ? ' pk' : '');
+    b.style.height = (9 + i * 1.6) + 'px';
+    barsWrap.appendChild(b);
+    bars.push(b);
+  }
+
+  LANGS.forEach(function (l) {
+    var opt = document.createElement('option');
+    opt.value = l[0]; opt.textContent = l[1];
+    langSelect.appendChild(opt);
+  });
+  langSelect.value = 'en-US';
+
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var supported = !!SR;
+
+  var state = {
+    listening: false,
+    text: '',
+    interim: '',
+    seconds: 0,
+    armed: false,
+    lang: 'en-US'
+  };
+  var rec = null;
+  var wantListening = false;
+  var timerId = null;
+  var audioCtx = null, audioStream = null, raf = null;
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function renderClock() {
+    var s = state.seconds;
+    clockEl.textContent = pad(Math.floor(s / 3600)) + ':' + pad(Math.floor(s / 60) % 60) + ':' + pad(s % 60);
+  }
+
+  function renderScreen() {
+    if (!state.listening) return; // textarea is the source of truth while idle/editable
+    var full = state.text + (state.interim ? (state.text ? ' ' : '') + state.interim : '');
+    screenEl.value = full;
+    screenEl.scrollTop = screenEl.scrollHeight;
+  }
+
+  function renderWordCount() {
+    var full = (screenEl.value || '').trim();
+    wordEl.textContent = full ? full.split(/\s+/).filter(Boolean).length : 0;
+  }
+
+  function renderButtons() {
+    var hasText = Boolean((screenEl.value || '').trim());
+    copyBtn.disabled = !hasText;
+    saveBtn.disabled = !hasText;
+    clearBtn.disabled = !hasText;
+  }
+
+  function showAlert(msg) {
+    alertEl.textContent = msg;
+    alertEl.classList.add('show');
+  }
+  function hideAlert() {
+    alertEl.classList.remove('show');
+    alertEl.textContent = '';
+  }
+
+  function stopMeter() {
+    if (raf) cancelAnimationFrame(raf);
+    if (audioStream) audioStream.getTracks().forEach(function (t) { t.stop(); });
+    if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+    audioCtx = null; audioStream = null; raf = null;
+    bars.forEach(function (el) { el.style.opacity = '0.12'; });
+  }
+
+  function startMeter() {
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new Ctx();
+      var src = audioCtx.createMediaStreamSource(stream);
+      var analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 1024;
+      src.connect(analyser);
+      audioStream = stream;
+      var data = new Uint8Array(analyser.fftSize);
+      var smooth = 0;
+      function tick() {
+        analyser.getByteTimeDomainData(data);
+        var sum = 0;
+        for (var i = 0; i < data.length; i++) {
+          var v = (data[i] - 128) / 128;
+          sum += v * v;
+        }
+        var level = Math.min(1, Math.sqrt(sum / data.length) * 3.4);
+        smooth = level > smooth ? level : smooth * 0.86 + level * 0.14;
+        for (var j = 0; j < bars.length; j++) {
+          bars[j].style.opacity = smooth >= (j + 1) / BAR_COUNT ? '1' : '0.12';
+        }
+        raf = requestAnimationFrame(tick);
+      }
+      raf = requestAnimationFrame(tick);
+    }).catch(function () { /* meter is a nicety only */ });
+  }
+
+  function buildRecognition() {
+    var r = new SR();
+    r.continuous = true;
+    r.interimResults = true;
+    r.lang = state.lang;
+
+    r.onresult = function (e) {
+      var live = '', settled = '';
+      for (var i = e.resultIndex; i < e.results.length; i++) {
+        var chunk = e.results[i][0].transcript;
+        if (e.results[i].isFinal) settled += chunk;
+        else live += chunk;
+      }
+      if (settled) {
+        var prev = state.text;
+        var joiner = prev && !/\s$/.test(prev) ? ' ' : '';
+        state.text = (prev + joiner + settled.trim()).replace(/\s+([.,!?;:])/g, '$1');
+      }
+      state.interim = live;
+      renderScreen();
+      renderWordCount();
+      renderButtons();
+    };
+
+    r.onerror = function (e) {
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        wantListening = false;
+        stopListeningUI();
+        showAlert("Microphone access is blocked. Allow the mic for this page in your browser's site settings, then press Record again.");
+      } else if (e.error === 'network') {
+        showAlert('Speech recognition lost its connection. Check your network and press Record again.');
+      } else {
+        showAlert('Recording stopped: ' + e.error);
+      }
+    };
+
+    r.onend = function () {
+      if (wantListening) {
+        try { r.start(); } catch (err) { /* already starting */ }
+      } else {
+        state.interim = '';
+        renderScreen();
+      }
+    };
+
+    return r;
+  }
+
+  function stopListeningUI() {
+    state.listening = false;
+    lamp.classList.remove('on');
+    lampText.textContent = 'Ready';
+    recBtn.textContent = 'Record';
+    recBtn.classList.remove('live');
+    screenEl.readOnly = false;
+    if (timerId) { clearInterval(timerId); timerId = null; }
+    stopMeter();
+  }
+
+  function startListeningUI() {
+    state.listening = true;
+    lamp.classList.add('on');
+    lampText.textContent = 'Rec';
+    recBtn.textContent = 'Stop';
+    recBtn.classList.add('live');
+    screenEl.readOnly = true;
+    timerId = setInterval(function () {
+      state.seconds++;
+      renderClock();
+    }, 1000);
+  }
+
+  function start() {
+    if (!supported) return;
+    hideAlert();
+    state.armed = false;
+    clearBtn.classList.remove('armed');
+    clearBtn.textContent = 'Clear';
+    state.text = (screenEl.value || '').trim();
+    state.interim = '';
+    rec = buildRecognition();
+    wantListening = true;
+    try {
+      rec.start();
+      startListeningUI();
+      startMeter();
+    } catch (err) {
+      showAlert('Could not start the microphone. Close other tabs using it and try again.');
+      wantListening = false;
+    }
+  }
+
+  function stop() {
+    wantListening = false;
+    if (rec) rec.stop();
+    stopListeningUI();
+    renderScreen();
+  }
+
+  recBtn.addEventListener('click', function () {
+    if (state.listening) stop(); else start();
+  });
+
+  langSelect.addEventListener('change', function () {
+    state.lang = langSelect.value;
+    langLabelEl.textContent = langSelect.options[langSelect.selectedIndex].textContent;
+    if (wantListening && rec) {
+      rec.stop();
+      setTimeout(function () {
+        if (!wantListening) return;
+        rec = buildRecognition();
+        try { rec.start(); } catch (err) { /* noop */ }
+      }, 180);
+    }
+  });
+
+  copyBtn.addEventListener('click', function () {
+    var text = (screenEl.value || '').trim();
+    if (!text) return;
+    var done = function () {
+      copyBtn.textContent = 'Copied';
+      setTimeout(function () { copyBtn.textContent = 'Copy'; }, 1600);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () { legacyCopy(text); done(); });
+    } else {
+      legacyCopy(text); done();
+    }
+  });
+  function legacyCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+
+  saveBtn.addEventListener('click', function () {
+    var text = (screenEl.value || '').trim();
+    if (!text) return;
+    var d = new Date();
+    var name = 'dictation-' + d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + '.txt';
+    var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  clearBtn.addEventListener('click', function () {
+    if (!state.armed) {
+      state.armed = true;
+      clearBtn.classList.add('armed');
+      clearBtn.textContent = 'Clear?';
+      setTimeout(function () {
+        state.armed = false;
+        clearBtn.classList.remove('armed');
+        clearBtn.textContent = 'Clear';
+      }, 3000);
+      return;
+    }
+    state.text = '';
+    state.interim = '';
+    state.seconds = 0;
+    state.armed = false;
+    screenEl.value = '';
+    clearBtn.classList.remove('armed');
+    clearBtn.textContent = 'Clear';
+    renderClock();
+    renderWordCount();
+    renderButtons();
+    hideAlert();
+  });
+
+  screenEl.addEventListener('input', function () {
+    if (state.listening) return;
+    renderWordCount();
+    renderButtons();
+  });
+
+  window.addEventListener('beforeunload', function () {
+    wantListening = false;
+    if (rec) { try { rec.abort(); } catch (e) {} }
+    stopMeter();
+  });
+
+  if (!supported) {
+    recBtn.disabled = true;
+    screenEl.placeholder = 'This browser has no speech recognition. Open this page in Safari on iPhone/iPad, or Chrome/Edge on desktop or Android.';
+  }
+
+  renderClock();
+  renderWordCount();
+  renderButtons();
+})();
+</script>
+</body>
+</html>
