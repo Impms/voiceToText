@@ -448,6 +448,7 @@ textarea.du-screen::placeholder { color: var(--text-ghost); }
     r.lang = state.lang;
 
     r.onresult = function (e) {
+      if (r !== rec) return; // a stale session from a previous take — ignore
       var live = '', settled = '';
       for (var i = e.resultIndex; i < e.results.length; i++) {
         var chunk = e.results[i][0].transcript;
@@ -466,6 +467,7 @@ textarea.du-screen::placeholder { color: var(--text-ghost); }
     };
 
     r.onerror = function (e) {
+      if (r !== rec) return; // a stale session from a previous take — ignore
       if (e.error === 'no-speech' || e.error === 'aborted') return;
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         wantListening = false;
@@ -479,6 +481,7 @@ textarea.du-screen::placeholder { color: var(--text-ghost); }
     };
 
     r.onend = function () {
+      if (r !== rec) return; // a stale session ending late — must not restart or touch state
       if (wantListening) {
         try { r.start(); } catch (err) { /* already starting */ }
       } else {
